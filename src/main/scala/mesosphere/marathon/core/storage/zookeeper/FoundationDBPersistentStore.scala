@@ -1,9 +1,10 @@
 package mesosphere.marathon
 package core.storage
 package zookeeper
+
 import java.util.concurrent.{CompletableFuture, CompletionException}
 
-import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.{ActorMaterializer, Materializer, OverflowStrategy}
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.ByteString
@@ -56,7 +57,7 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
   private def createWithinTx(node: PersistenceStore.Node, tx: TransactionContext): CompletableFuture[String] = {
     val payloadKey = payloadDir.pack(Tuple.from(node.path))
 
-    val splittedKey = node.path.split("/").filter(_.nonEmpty)
+    val splittedKey = node.path.split("/")
     tx.runAsync { tr =>
 
       val parentSegments = splittedKey.init
@@ -67,7 +68,7 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
       val f = existense.map {
         case (null, maybeParent) if java.util.Arrays.equals(maybeParent, parentKey) =>
           tr.set(payloadKey, node.data.toArray)
-          val childKey = childrenDir.pack(Tuple.from("/" + splittedKey.init.mkString("/"), splittedKey.last))
+          val childKey = childrenDir.pack(Tuple.from(splittedKey.init.mkString("/"), splittedKey.last))
           tr.set(childKey, Array.empty)
           node.path
 
@@ -267,7 +268,7 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
         }
       case CheckOp(path) =>
         existsWithinTx(path, tr).toScala
-          .map{
+          .map {
             case true => Done
             case false => throw new NoNodeException(path)
           }
