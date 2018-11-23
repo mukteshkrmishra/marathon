@@ -56,20 +56,18 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
   private def createWithinTx(node: PersistenceStore.Node, tx: TransactionContext): CompletableFuture[String] = {
     val payloadKey = payloadDir.pack(Tuple.from(node.path))
 
-    val splittedKey = node.path.split("/")
+    val splittedKey = node.path.split("/").filter(_.nonEmpty)
     tx.runAsync { tr =>
 
       val parentSegments = splittedKey.init
       val parentKey = childrenDir.pack(Tuple.from("/" + parentSegments.init.mkString("/"), parentSegments.last))
 
-      val existense: Future[(Array[Byte], Array[Byte])] = tr.readAsync { rtx =>
-        (rtx.get(payloadKey).toScala zip rtx.getKey(KeySelector.firstGreaterOrEqual(parentKey)).toScala).toJava.toCompletableFuture
-      }.toScala
+      val existense = tr.get(payloadKey).toScala zip tr.getKey(KeySelector.firstGreaterOrEqual(parentKey)).toScala
 
       val f = existense.map {
-        case (null, maybeParent) if maybeParent == parentKey =>
+        case (null, maybeParent) if java.util.Arrays.equals(maybeParent, parentKey) =>
           tr.set(payloadKey, node.data.toArray)
-          val childKey = childrenDir.pack(Tuple.from("/" + splittedKey.init, splittedKey.last))
+          val childKey = childrenDir.pack(Tuple.from("/" + splittedKey.init.mkString("/"), splittedKey.last))
           tr.set(childKey, Array.empty)
           node.path
 
