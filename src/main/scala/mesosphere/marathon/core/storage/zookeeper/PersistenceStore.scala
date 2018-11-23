@@ -9,6 +9,7 @@ import mesosphere.marathon.core.storage.zookeeper.PersistenceStore.{Node, StoreO
 import scala.concurrent.Future
 import scala.util.Try
 
+import scala.concurrent.duration._
 /**
   * An interface for a simple persistence store abstraction for the underlying Zookeeper store. Supported are basic
   * create, read, update, delete and check methods along with transaction operations and Zookeeper specific children
@@ -22,7 +23,7 @@ trait PersistenceStore {
     */
   def createFlow: Flow[Node, String, NotUsed]
   def create(node: Node): Future[String]
-  def create(nodes: Seq[Node]): Source[String, NotUsed] = Source(nodes).via(createFlow)
+  def create(nodes: Seq[Node]): Source[String, NotUsed] = Source(nodes).throttle(1, 100.millis).via(createFlow)
 
   /**
     * A Flow for reading nodes from the store. It takes a stream of node paths and returns a stream of Try[Node] elements.
