@@ -61,6 +61,7 @@ object Dependencies {
     commonsCompress % "compile", // used for tar flow
     commonsIO % "compile",
     alpakkaCodes % "compile",
+    foundationdb % "compile",
 
     // old Chaos deps
     guava % "compile",
@@ -169,6 +170,7 @@ object Dependency {
   val jacksonJaxrs = "com.fasterxml.jackson.jaxrs" % "jackson-jaxrs-json-provider" % V.Jackson
   val jacksonScala = "com.fasterxml.jackson.module" %% "jackson-module-scala" % V.Jackson
   val java8Compat = "org.scala-lang.modules" %% "scala-java8-compat" % V.Java8Compat
+  val foundationdb = "org.foundationdb" % "fdb-java" % "6.0.15"
 
   val jerseyCore = "org.glassfish.jersey.core" % "jersey-common" % V.Jersey
   val jerseyMultiPart =  "org.glassfish.jersey.media" % "jersey-media-multipart" % V.Jersey
