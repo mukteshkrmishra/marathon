@@ -173,9 +173,9 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
     *
     * @return
     */
-  override def childrenFlow: Flow[String, marathon.Seq[String], NotUsed] = Flow[String].mapAsync(150)(children)
+  override def childrenFlow(absolute: Boolean): Flow[String, Try[Children], NotUsed] = Flow[String].mapAsync(150)(p => children(p, absolute))
 
-  override def children(path: String): Future[marathon.Seq[String]] = {
+  override def children(path: String, absolute: Boolean): Future[Try[Children]] = {
 
     val splitted = path.split("/").filter(_.nonEmpty)
     val lastSegment = splitted.last
@@ -209,11 +209,14 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
               path.split("/").last == lastSegment
           }
           .map {
-            case p @ (path, child) =>
+            case p @ (path, child) if absolute =>
               path + "/" + child
+            case p @ (path, child) =>
+              child
           }
           .toMat(Sink.seq)(Keep.right)
           .run()
+          .map(c => Success(c))
       case _ =>
         throw new NoNodeException(path)
     }
@@ -228,7 +231,7 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
     *
     * @return
     */
-  override def existsFlow: Flow[String, Boolean, NotUsed] = Flow[String].mapAsync(150)(exists)
+  override def existsFlow: Flow[String, (String, Boolean), NotUsed] = Flow[String].mapAsync(150)(s => exists(s).map(s -> _))
 
   override def exists(path: String): Future[Boolean] = existsWithinTx(path, database).toScala
 
@@ -280,38 +283,42 @@ class FoundationDBPersistentStore(directory: DirectorySubspace, database: Databa
     case c: CompletionException => throw c.getCause
   }
 
+  /**
+    * Create a node if none exists with the given path. Return the path of the node. This operation is atomic.
+    *
+    * @param node to create
+    * @return
+    */
+  override def createIfAbsent(node: PersistenceStore.Node): Future[String] = {
+    create(node)
+      .recoverWith {
+        case _: NodeExistsException => Future(node.path) // CreateIfAbsent hasn't created a new node since it already exists
+      }
+  }
+
   private def asyncIterableToSource(getRange: ReadTransaction => AsyncIterable[KeyValue])(
     implicit
-    tcx: ReadTransactionContext,
+    db: Database,
     ec: ExecutionContext): Source[KeyValue, NotUsed] = {
-    Source.unfoldResourceAsync[KeyValue, (AsyncIterator[KeyValue], Promise[NotUsed])](
+    Source.unfoldResourceAsync[KeyValue, (AsyncIterator[KeyValue], Transaction)](
       () => {
-        val transactionPromise = Promise[ReadTransaction]()
-        val resultPromise = Promise[NotUsed]()
-        tcx.readAsync { tr =>
-          transactionPromise.trySuccess(tr)
-          resultPromise.future.toJava.toCompletableFuture
-        }
-        transactionPromise.future.map { tr =>
-          val res = getRange(tr)
-          res.iterator() -> resultPromise
-        }
-      }, {
-        case (iterator, resultPromise) =>
-          iterator.onHasNext().toScala.map {
+        val transaction = database.createTransaction()
+        Future.successful(getRange(transaction.snapshot()).iterator() -> transaction)
+      },
+      {
+        case (asyncIterator, tx) =>
+          asyncIterator.onHasNext().toScala.map {
             case java.lang.Boolean.TRUE =>
-              Some(iterator.next())
+              Some(asyncIterator.next())
             case _ =>
-              resultPromise.trySuccess(NotUsed)
               None
           }
-      }, {
-        case (iterator, resultPromise) =>
-          Future.successful {
-            iterator.cancel()
-            resultPromise.trySuccess(NotUsed)
-            Done
-          }
+      },
+      {
+        case (asyncIterator, tx) =>
+          tx.cancel()
+          tx.close()
+          Future.successful(Done)
       }
     )
   }

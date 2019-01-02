@@ -242,7 +242,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
         store.create(nodes2).runWith(Sink.seq).futureValue
 
         And("children are fetched")
-        val children = store.children("/home").futureValue
+        val children = store.children("/home", true).futureValue.get
 
         children should contain theSameElementsAs (nodes.map(_.path))
       }
@@ -250,7 +250,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
       "fetching children of an non-existing node leads to an exception" in {
         And("children for a non-existing node are fetched")
         intercept[NoNodeException] {
-          Await.result(store.children(randomPath()), patienceConfig.timeout)
+          Await.result(store.children(randomPath(), true), patienceConfig.timeout)
         }
       }
     }
@@ -281,7 +281,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
         res shouldBe Done
 
         And(s"the should be two children nodes under $prefix")
-        val children = store.children(prefix).futureValue
+        val children = store.children(prefix, true).futureValue.get
         children.size shouldBe 2
         children should contain theSameElementsAs (ops.map(_.node.path))
       }
@@ -302,7 +302,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
         res shouldBe Done
 
         And(s"the should be one node under $prefix")
-        val children = store.children(prefix).futureValue
+        val children = store.children(prefix, true).futureValue.get
         children.size shouldBe 1
         children.head shouldBe path
 
@@ -327,7 +327,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
         res shouldBe Done
 
         And(s"no children nodes are found under $prefix")
-        val children = store.children(prefix).futureValue
+        val children = store.children(prefix, true).futureValue.get
         children.size shouldBe 0
       }
 
@@ -346,7 +346,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
         }
 
         And(s"no children nodes are found under $prefix")
-        val children = store.children(prefix).futureValue
+        val children = store.children(prefix, true).futureValue.get
         children.size shouldBe 0
       }
 
@@ -366,7 +366,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
         res shouldBe Done
 
         And(s"the should be one node under $prefix")
-        val children = store.children(prefix).futureValue
+        val children = store.children(prefix, true).futureValue.get
         children.size shouldBe 1
       }
 
@@ -387,7 +387,7 @@ class FoundationDBPersistenceStoreTest extends UnitTest
         }
 
         And(s"no children nodes are found under $prefix")
-        val children = store.children(prefix).futureValue
+        val children = store.children(prefix, true).futureValue.get
         children.size shouldBe 0
       }
     }
