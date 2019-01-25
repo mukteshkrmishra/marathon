@@ -31,34 +31,48 @@ val PACKAGE_DOCS_DIR: Path = pwd / 'target / "universal-docs"
 
 val isMacOS = %%("uname", "-a").out.string.startsWith("Darwin")
 
+
 /**
  * Compile Marathon and run unit, integration tests.
  *
  * @param logFileName Name of file which collects logs.
  */
 @main
-def compileAndTest(logFileName: String): Unit = utils.stage("Compile and Test") {
-
-  def run(cmd: String *) = utils.runWithTimeout(30.minutes, logFileName)(cmd)
-  def runIn(workDirectory: Path)(cmd: String *) = utils.runWithTimeout(5.minutes, logFileName, workDirectory)(cmd)
+def compile(logFileName: Path): Unit = utils.stage(s"Compile") {
+  val loggedRunner = utils.LoggedRunner(logFileName)
 
   // Run type-generator compile before anything else.
-  runIn(pwd / "type-generator")("sbt", "compile")
+  loggedRunner
+    .copy(workDirectory = pwd / "type-generator", timeout = 10.minutes)
+    .runWithTimeout("sbt", "compile")
 
-  run("sbt", "clean", "integration/clean", "compile", "test:compile", "integration/test:compile")
+  loggedRunner.runWithTimeout("sbt", "clean", "integration/clean", "compile", "test:compile", "integration/test:compile")
 
   checkUnusedImports(logFileName)
 
-  run("sbt", "test", "integration/test")
+  // Compile other projects.
+  loggedRunner.runWithTimeout("sbt", "benchmark/compile", "mesos-simulation/compile", "plugin-interface/compile")
+}
+
+@main
+def unitTest(logFileName: Path): Unit = utils.stage(s"Unit tests") {
+  val loggedRunner = utils.LoggedRunner(logFileName)
+
+  loggedRunner.runWithTimeout("sbt", "test")
+}
+
+@main
+def integrationTest(logFileName: Path): Unit = utils.stage(s"Integration tests") {
+  val loggedRunner = utils.LoggedRunner(logFileName)
+
+  loggedRunner.runWithTimeout("sbt", "integration/test")
 
   // Check leaked processes after integration tests
   checkLeakedProcesses()
+}
 
-  // Compile other projects.
-  run("sbt", "benchmark/compile")
-  run("sbt", "mesos-simulation/compile")
-  run("sbt", "plugin-interface/compile")
-
+@main
+def systemTest(logFileName: Path): Unit = utils.stage(s"System tests") {
   // Check system integration tests.
   checkSystemIntegrationTests(logFileName)
 }
@@ -73,8 +87,8 @@ def checkLeakedProcesses(): Unit = {
 }
 
 @main
-def checkUnusedImports(logFileName: String): Unit = {
-  val logs = read! pwd / logFileName
+def checkUnusedImports(logFileName: Path): Unit = {
+  val logs = read! logFileName
   val unusedImportMatch = """.*\.scala:\d+:\d+: Unused import.*\n.*import.*\n.*\^""".r
   val unusedImports = unusedImportMatch.findAllIn(logs).toVector
 
@@ -82,9 +96,10 @@ def checkUnusedImports(logFileName: String): Unit = {
 }
 
 @main
-def checkSystemIntegrationTests(logFileName: String): Unit = {
-  def run(cmd: String *) = utils.runWithTimeout(30.minutes, logFileName)(cmd)
-  run("flake8", "--count", "--max-line-length=120", "tests/system", "tests/integration/src/test/resources/python")
+def checkSystemIntegrationTests(logFileName: Path): Unit = {
+  val loggedRunner = utils.LoggedRunner(logFileName)
+
+  loggedRunner.runWithTimeout("flake8", "--count", "--max-line-length=120", "tests/system", "tests/integration/src/test/resources/python")
 }
 
 /**
@@ -94,10 +109,10 @@ def checkSystemIntegrationTests(logFileName: String): Unit = {
  * @param sandboxFileName The start of the file name for the sandboxes archive.
  */
 @main
-def zipLogs(logFileName: String = "ci.log", sandboxFileName: String = "sandboxes"): Unit = {
-  Try(%("tar", "--exclude=provisioner", "-zcf", s"$sandboxFileName.tar.gz", "sandboxes", "tests/integration/sandboxes"))
+def zipLogs(logFileName: Path, sandboxFileName: Path): Unit = {
+  Try(%("tar", "--exclude=provisioner", "-zcf", s"${sandboxFileName}.tar.gz", "sandboxes", "tests/integration/sandboxes"))
   Try(%('sudo, "rm", "-rf", "sandboxes", "tests/integration/sandboxes"))
-  Try(%("tar", "-zcf", s"$logFileName.tar.gz", "--remove-files", logFileName))
+  Try(%("tar", "-zcf", s"$logFileName.tar.gz", "--remove-files", logFileName.toString))
 }
 
 /**
@@ -131,7 +146,7 @@ def uploadTarballPackagesToS3(version: SemVer, buildLocation: String): Option[aw
  *
  * @return version of build.
  */
-def createTarballPackages(): SemVer = utils.stage("Package Tarballs") {
+@main def createTarballPackages(): SemVer = utils.stage("Package Tarballs") {
   val result = %%('sbt, "universal:packageZipTarball", "universal-docs:packageZipTarball")
 
   val version = %%("./version").out.string.trim
@@ -163,7 +178,7 @@ def asPullRequest(pullId: String)(run: => (SemVer, Option[awsClient.Artifact])):
 /**
  * Provision the build host.
  */
-def provisionHost(): Unit = utils.stage("Provision") {
+@main def provisionHost(): Unit = utils.stage("Provision") {
   // Set port range for random port 0 allocation.
   %('sudo, "ci/set_port_range.sh")
 
@@ -181,33 +196,47 @@ def provisionHost(): Unit = utils.stage("Provision") {
  */
 @main
 def build(runTests: Boolean = true, buildName: String = "run"): SemVer = {
-  if (runTests) {
-    val logFileName = s"$buildName.log"
-    val sandboxFile = s"$buildName.sandboxes"
-    try {
-      compileAndTest(logFileName)
-    } finally {
-      zipLogs(logFileName, sandboxFile)    // Try to archive ci and sandbox logs in any case
+  val logFileName = pwd / s"$buildName.log"
+  val sandboxFile = pwd / s"$buildName.sandboxes"
+  try {
+    compile(logFileName)
+    if (runTests) {
+      unitTest(logFileName)
+      integrationTest(logFileName)
+      systemTest(logFileName)
     }
+  } finally {
+    zipLogs(logFileName, sandboxFile)    // Try to archive ci and sandbox logs in any case
   }
 
   createTarballPackages()
 }
 
-/**
-  * Builds docker and linux native packages, then runs the tests in tests/package/test.sc
-  */
 @main
-def buildDockerAndLinuxPackages(): Unit = {
-  utils.stage("Package Docker Image, Debian and RedHat Packages") {
+def buildDockerPackage(): Unit = {
+  utils.stage("Package Docker Image") {
     %('sbt, "docker:publishLocal")
+  }
+}
 
+@main
+def buildLinuxPackages(): Unit = {
+  utils.stage("Build Linux native packages") {
     val toolPath = pwd/'tools/'packager
     %('make, "clean")(toolPath)
     %('make, "all", "-j")(toolPath)
   }
 }
 
+/**
+  * Builds docker and linux native packages, then runs the tests in tests/package/test.sc
+  */
+def buildDockerAndLinuxPackages(): Unit = {
+  buildDockerPackage()
+  buildLinuxPackages()
+}
+
+@main
 def testDockerAndLinuxPackages(): Unit = {
   utils.stage("Testing Docker Image, Debian and RedHat Packages") {
     // create test-bed docker images and run the package tests

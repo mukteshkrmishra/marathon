@@ -10,6 +10,7 @@ import scala.util.Try
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import scala.concurrent.duration._
 
 import $file.provision
 
@@ -18,8 +19,7 @@ implicit val SemVerRead: scopt.Read[SemVer] =
 
 val timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
-def ciLogFile(name: String): File = {
-  val log = new File(name)
+def ciLogFile(log: File): File = {
   if (!log.exists())
     log.createNewFile()
   log
@@ -61,8 +61,10 @@ def printStageTitle(name: String): Unit = {
 
 case class BuildException(val cmd: String, val exitValue: Int, private val cause: Throwable = None.orNull)
   extends Exception(s"'$cmd' exited with $exitValue", cause)
+
 case class StageException(private val message: String = "", private val cause: Throwable = None.orNull)
   extends Exception(message, cause)
+
 def stage[T](name: String)(block: => T): T = {
   printStageTitle(name)
 
@@ -74,38 +76,51 @@ def stage[T](name: String)(block: => T): T = {
   }
 }
 
-/**
- * Run a process with given commands and time out it runs too long.
- *
- * @param timeout The maximum time to wait.
- * @param logFileName Name of file which collects all logs.
- * @param commands The commands that are executed in a process. E.g. "sbt",
- *  "compile".
- */
-def runWithTimeout(timeout: FiniteDuration, logFileName: String, workDirectory: Path = pwd)(commands: Seq[String]): Unit = {
+case class LoggedRunner(logFileName: Path, workDirectory: Path = pwd, timeout: FiniteDuration = 30.minutes) {
 
-  val builder = new java.lang.ProcessBuilder()
-  val buildProcess = builder
-    .directory(new java.io.File(workDirectory.toString))
-    .command(commands.asJava)
-    .inheritIO()
-    .redirectOutput(ProcessBuilder.Redirect.appendTo(ciLogFile(logFileName)))
-    .start()
+  /**
+    * Run a process with given commands and time out it runs too long.
+    *
+    * @param timeout The maximum time to wait.
+    * @param logFileName Name of file which collects all logs.
+    * @param commands The commands that are executed in a process. E.g. "sbt",
+    *  "compile".
+    */
+  def runWithTimeout(args: String*): Unit = {
+    val cmd = args.mkString(" ")
+    println(s"""
+Running (with output to ${logFileName}):
+
+   ${cmd}
+""")
+    write.append(logFileName, s"""
+Running:
+
+  ${cmd}
+
+""")
+
+    val builder = new java.lang.ProcessBuilder()
+    val buildProcess = builder
+      .directory(new java.io.File(workDirectory.toString))
+      .command(args.asJava)
+      .inheritIO()
+      .redirectOutput(ProcessBuilder.Redirect.appendTo(ciLogFile(logFileName.toIO)))
+      .start()
 
     val exited = buildProcess.waitFor(timeout.length, timeout.unit)
 
     if (exited) {
       val exitValue = buildProcess.exitValue
       if(buildProcess.exitValue != 0) {
-        val cmd = commands.mkString(" ")
         throw new utils.BuildException(cmd, exitValue)
       }
     } else {
       // The process timed out. Try to kill it.
       buildProcess.destroyForcibly().waitFor()
-      val cmd = commands.mkString(" ")
       throw new java.util.concurrent.TimeoutException(s"'$cmd' timed out after $timeout.")
     }
+  }
 }
 
 /**
