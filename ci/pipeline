@@ -4,7 +4,6 @@
 import $ivy.`org.slf4j:slf4j-simple:1.7.25`
 
 import ammonite.ops._
-import ammonite.ops.ImplicitWd._
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
@@ -25,9 +24,10 @@ import utils.{SemVer, SemVerRead}
 import utils.BranchType
 import utils.BranchType._
 
+implicit val projectRoot = utils.findFolderContaining("version", pwd).get
 
-val PACKAGE_DIR: Path = pwd / 'target / 'universal
-val PACKAGE_DOCS_DIR: Path = pwd / 'target / "universal-docs"
+val PACKAGE_DIR: Path = projectRoot / 'target / 'universal
+val PACKAGE_DOCS_DIR: Path = projectRoot / 'target / "universal-docs"
 
 val isMacOS = %%("uname", "-a").out.string.startsWith("Darwin")
 
@@ -43,7 +43,8 @@ def compile(logFileName: Path): Unit = utils.stage(s"Compile") {
 
   // Run type-generator compile before anything else.
   loggedRunner
-    .copy(workDirectory = pwd / "type-generator", timeout = 10.minutes)
+    .withWorkDirectory(projectRoot / "type-generator")
+    .withTimeout(10.minutes)
     .runWithTimeout("sbt", "compile")
 
   loggedRunner.runWithTimeout("sbt", "clean", "integration/clean", "compile", "test:compile", "integration/test:compile")
@@ -222,7 +223,7 @@ def buildDockerPackage(): Unit = {
 @main
 def buildLinuxPackages(): Unit = {
   utils.stage("Build Linux native packages") {
-    val toolPath = pwd/'tools/'packager
+    val toolPath = projectRoot / 'tools / 'packager
     %('make, "clean")(toolPath)
     %('make, "all", "-j")(toolPath)
   }
@@ -240,7 +241,7 @@ def buildDockerAndLinuxPackages(): Unit = {
 def testDockerAndLinuxPackages(): Unit = {
   utils.stage("Testing Docker Image, Debian and RedHat Packages") {
     // create test-bed docker images and run the package tests
-    val testPath = pwd/'tests/'package
+    val testPath = projectRoot / 'tests / 'package
     %('make, "clean")(testPath)
     %('make, "test", "-j")(testPath)
   }

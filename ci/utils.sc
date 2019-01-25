@@ -76,7 +76,13 @@ def stage[T](name: String)(block: => T): T = {
   }
 }
 
-case class LoggedRunner(logFileName: Path, workDirectory: Path = pwd, timeout: FiniteDuration = 30.minutes) {
+case class LoggedRunner(logFileName: Path, timeout: FiniteDuration = 30.minutes)(implicit workDirectory: Path = pwd) {
+
+  def withWorkDirectory(workDirectory: Path) =
+    LoggedRunner(logFileName, timeout)(workDirectory)
+
+  def withTimeout(timeout: FiniteDuration) =
+    LoggedRunner(logFileName, timeout)(workDirectory)
 
   /**
     * Run a process with given commands and time out it runs too long.
@@ -222,4 +228,13 @@ object SemVer {
         throw new IllegalArgumentException(s"Could not parse version $version.")
     }
 
+}
+
+def findFolderContaining(filename: String, pwd: Path): Option[Path] = {
+  if (pwd == root)
+    None
+  else if ((pwd / filename).toIO.exists)
+    Some(pwd)
+  else
+    findFolderContaining(filename, pwd / up)
 }
