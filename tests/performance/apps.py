@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from abc import ABC, abstractmethod
 import asyncio
 import aiohttp
 import logging
@@ -10,6 +11,21 @@ logger = logging.getLogger(__name__)
 
 MARATHON_BASE = 'http://localhost:8080'
 # MARATHON='https://httpbin.org/post'
+
+
+class Collection(ABC):
+
+    @abstractmethod
+    async def all(self):
+        pass
+
+    @abstractmethod
+    async def create(self, spec):
+        pass
+
+    async def delete_all(self):
+        async for app in self.all():
+            await app.delete()
 
 
 class AppObject:
@@ -28,7 +44,7 @@ class AppObject:
                 await resp.text()
 
 
-class AppsCollection:
+class Apps(Collection):
 
     def __init__(self, base):
         self._base = base
@@ -50,9 +66,8 @@ class AppsCollection:
                 logger.info('Done posting %s: %d', app_id, resp.status)
                 return AppObject(self._base, app_spec)
 
-    async def delete_all(self):
-        async for app in self.all():
-            await app.delete()
+
+# class Pods(Collection):
 
 
 class Marathon:
@@ -61,7 +76,7 @@ class Marathon:
         self._base = base
 
     def apps(self):
-        return AppsCollection(self._base)
+        return Apps(self._base)
 
     def pods():
         pass
