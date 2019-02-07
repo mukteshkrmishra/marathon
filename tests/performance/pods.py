@@ -34,7 +34,7 @@ async def create_pod(pod_spec):
         pod_id = pod_spec['id']
         logger.info('Posting pod %s', pod_id)
         async with session.post("{}/v2/pods".format(MARATHON_BASE), json=pod_spec) as resp:
-            assert resp.status == 201, 'Marathon replised with {}:{}'.format(resp.status, await resp.text())
+            assert resp.status == 201, 'Marathon replied with {}:{}'.format(resp.status, await resp.text())
             logger.info('Done posting %s: %d', pod_id, resp.status)
 
 
