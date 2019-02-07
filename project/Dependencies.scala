@@ -59,6 +59,7 @@ object Dependencies {
     alpakkaS3 % "compile",
     commonsCompress % "compile", // used for tar flow
     commonsIO % "compile",
+    commonsText % "compile",
     alpakkaCodes % "compile",
 
     // old Chaos deps
@@ -110,6 +111,7 @@ object Dependency {
     val Alpakka  = "0.14"
     val ApacheCommonsCompress = "1.13"
     val ApacheCommonsIO = "2.6"
+    val ApacheCommonsText = "1.6"
     val AsyncAwait = "0.9.7"
     val Aws = "1.11.243"
     val Diffson = "2.2.2"
@@ -164,6 +166,7 @@ object Dependency {
   val beanUtils = "commons-beanutils" % "commons-beanutils" % "1.9.3"
   val commonsCompress = "org.apache.commons" % "commons-compress" % V.ApacheCommonsCompress
   val commonsIO = "commons-io" % "commons-io" % V.ApacheCommonsIO
+  val commonsText = "org.apache.commons" % "commons-text" % V.ApacheCommonsText
   val guava = "com.google.guava" % "guava" % V.Guava
   val guice = "com.google.inject" % "guice" % V.Guice
   val jGraphT = "org.javabits.jgrapht" % "jgrapht-core" % V.JGraphT

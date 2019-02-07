@@ -160,19 +160,26 @@ class AppInfoBaseData(
   }
 
   def podStatus(podDef: PodDefinition): Future[PodStatus] = async { // linter:ignore UnnecessaryElseBranch
+
+    val traceToken = new org.apache.commons.text.RandomStringGenerator.Builder().build().generate(8)
+    logger.info(s"+++ $traceToken Fetching pod status for ${podDef.id}")
+
+    val start = System.currentTimeMillis()
+
     val now = clock.now().toOffsetDateTime
     val instances = await(instancesByRunSpecFuture).specInstances(podDef.id)
-    val specByVersion: Map[Timestamp, Option[PodDefinition]] = await(Future.sequence(
-      // TODO(jdef) if repositories ever support a bulk-load interface, use it here
-      instances.map(_.runSpecVersion).distinct.map { version =>
-        groupManager.podVersion(podDef.id, version.toOffsetDateTime).map(version -> _)
-      }
-    )).toMap
+
+    val instancesBySpecTime = System.currentTimeMillis()
+    logger.info(s"+++ $traceToken Instances by spec took: ${instancesBySpecTime - start}ms")
+
     val instanceStatus = instances
       .filter(!_.isScheduled)
-      .flatMap { inst => podInstanceStatus(inst)(specByVersion.apply) }
+      .flatMap { inst => podInstanceStatus(inst) }
     val statusSince = if (instanceStatus.isEmpty) now else instanceStatus.map(_.statusSince).max
     val state = await(podState(podDef.instances, instanceStatus, isPodTerminating(podDef.id)))
+
+    val podStateTime = System.currentTimeMillis()
+    logger.info(s"+++ $traceToken Pod state took: ${podStateTime - instancesBySpecTime}ms")
 
     val taskFailureOpt: Option[TaskFailure] = await {
       taskFailureRepository
@@ -186,6 +193,9 @@ class AppInfoBaseData(
           (instance, instance.tasksMap(failedTaskId), taskFailure)
       }
     }
+
+    val taskFailureTime = System.currentTimeMillis()
+    logger.info(s"+++ $traceToken Task failure took: ${taskFailureTime - podStateTime}ms")
 
     import mesosphere.mesos.protos.Implicits.taskStateToCaseClass
 
@@ -211,6 +221,9 @@ class AppInfoBaseData(
         )
     }.toList
 
+    val terminationHistoryTime = System.currentTimeMillis()
+    logger.info(s"+++ $traceToken Termination history took: ${terminationHistoryTime - taskFailureTime}ms")
+
     PodStatus(
       id = podDef.id.toString,
       spec = Raml.toRaml(podDef),
@@ -223,8 +236,11 @@ class AppInfoBaseData(
     )
   }
 
-  def podInstanceStatus(instance: Instance)(f: Timestamp => Option[PodDefinition]): Option[PodInstanceStatus] = {
-    val maybePodSpec: Option[PodDefinition] = f(instance.runSpecVersion)
+  def podInstanceStatus(instance: Instance): Option[PodInstanceStatus] = {
+    val maybePodSpec: Option[PodDefinition] = instance.runSpec match {
+      case podDef: PodDefinition  => Some(podDef)
+      case _ => None
+    }
 
     if (maybePodSpec.isEmpty)
       logger.warn(s"failed to generate pod instance status for instance ${instance.instanceId}, " +

@@ -570,7 +570,9 @@ class PodsResourceTest extends AkkaUnitTest with Mockito with JerseyTest {
       val f = Fixture()
 
       podSystem.findAll(any).returns(List(PodDefinition(), PodDefinition()))
-      val response = f.podsResource.findAll(f.auth.request)
+      val response = asyncRequest { r =>
+        f.podsResource.findAll(f.auth.request, r)
+      }
 
       withClue(s"response body: ${response.getEntity}") {
         response.getStatus should be(HttpServletResponse.SC_OK)
@@ -604,7 +606,9 @@ class PodsResourceTest extends AkkaUnitTest with Mockito with JerseyTest {
       podSystem.ids().returns(Set(PathId("mypod")))
       podStatusService.selectPodStatus(any, any).returns(Future(Some(PodStatus("mypod", Pod("mypod", containers = Seq.empty), PodState.Stable, statusSince = OffsetDateTime.now(), lastUpdated = OffsetDateTime.now(), lastChanged = OffsetDateTime.now()))))
 
-      val response = f.podsResource.allStatus(f.auth.request)
+      val response = asyncRequest { r =>
+        f.podsResource.allStatus(f.auth.request, r)
+      }
 
       withClue(s"response body: ${response.getEntity}") {
         response.getStatus should be(HttpServletResponse.SC_OK)

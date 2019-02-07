@@ -5,7 +5,7 @@ import aiohttp
 import logging
 import sys
 
-from tenacity import before_log, before_sleep_log, retry, wait_fixed
+from tenacity import before_log, before_sleep_log, retry, wait_random
 
 logger = logging.getLogger(__name__)
 
@@ -129,22 +129,22 @@ def pod_ids(number):
 
 def app_spec(app_id):
     return {"id": app_id,
-            "cmd": "while [ true ] ; do echo 'Hello Marathon' ; sleep 5 ; done",
+            "cmd": "sleep infinity",
             "cpus": 0.1,
             "mem": 10.0,
-            "instances": 1,
-            "executor": "/opt/shared/marathon_performance_executor-1.5.1",
-            "labels": {"MARATHON_EXECUTOR_ID": "custom-executor"}
+            "instances": 1
+            # "executor": "/opt/shared/marathon_performance_executor-1.5.1",
+            # "labels": {"MARATHON_EXECUTOR_ID": "custom-executor"}
             }
 
 
 def pod_spec(pod_id):
     return { "id": pod_id,
-             "scaling": { "kind": "fixed", "instances": 0 },
+             "scaling": { "kind": "fixed", "instances": 1 },
 	     "containers": [
                 { "name": "sleep1",
-	          "exec": { "command": { "shell": "sleep 100000000" } },
-	          "resources": { "cpus": 0.1, "mem": 10 }
+	          "exec": { "command": { "shell": "sleep infinity" } },
+	          "resources": { "cpus": 0.1, "mem": 10.0 }
                 }
 	     ],
 	     "networks": [ {"mode": "host"} ]
@@ -157,7 +157,8 @@ async def create_apps(number):
         logger.info('Create app with id %s', app_id)
         spec = app_spec(app_id)
 
-        @retry(before_sleep=before_sleep_log(logger, logging.DEBUG), before=before_log(logger, logging.DEBUG), wait=wait_fixed(2))
+        @retry(before_sleep=before_sleep_log(logger, logging.DEBUG), before=before_log(logger, logging.DEBUG),
+               wait=wait_random(min=3, max=5))
         async def create(spec):
             await client.apps().create(spec)
 
@@ -171,7 +172,8 @@ async def create_pods(number):
         logger.info('Create pod with id %s', pod_id)
         spec = pod_spec(pod_id)
 
-        @retry(before_sleep=before_sleep_log(logger, logging.DEBUG), before=before_log(logger, logging.DEBUG), wait=wait_fixed(2))
+        @retry(before_sleep=before_sleep_log(logger, logging.DEBUG), before=before_log(logger, logging.DEBUG),
+               wait=wait_random(min=3, max=5))
         async def create(spec):
             await client.pods().create(spec)
 

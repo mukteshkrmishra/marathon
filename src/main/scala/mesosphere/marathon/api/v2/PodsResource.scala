@@ -150,9 +150,14 @@ class PodsResource @Inject() (
   }
 
   @GET
-  def findAll(@Context req: HttpServletRequest): Response = authenticated(req) { implicit identity =>
-    val pods = podSystem.findAll(isAuthorized(ViewRunSpec, _))
-    ok(Json.stringify(Json.toJson(pods.map(Raml.toRaml(_)))))
+  def findAll(
+    @Context req: HttpServletRequest,
+    @Suspended asyncResponse: AsyncResponse): Unit = sendResponse(asyncResponse) {
+    async {
+      implicit val identity = await(authenticatedAsync(req))
+      val pods = podSystem.findAll(isAuthorized(ViewRunSpec, _))
+      ok(Json.stringify(Json.toJson(pods.map(Raml.toRaml(_)))))
+    }
   }
 
   @GET @Path("""{id:.+}""")
@@ -250,12 +255,20 @@ class PodsResource @Inject() (
 
   @GET
   @Path("::status")
-  def allStatus(@Context req: HttpServletRequest): Response = authenticated(req) { implicit identity =>
-    val future = Source(podSystem.ids()).mapAsync(RepositoryConstants.maxConcurrency) { id =>
-      podStatusService.selectPodStatus(id, authzSelector)
-    }.filter(_.isDefined).map(_.get).runWith(Sink.seq)
+  def allStatus(
+    @Context req: HttpServletRequest,
+    @Suspended asyncResponse: AsyncResponse): Unit = sendResponse(asyncResponse) {
+    async {
+      implicit val identity = await(authenticatedAsync(req))
 
-    ok(Json.stringify(Json.toJson(result(future))))
+      val future = Source(podSystem.ids()).mapAsync(RepositoryConstants.maxConcurrency) { id =>
+        podStatusService.selectPodStatus(id, authzSelector)
+      }.collect { case Some(podStatus) => podStatus }.runWith(Sink.seq)
+
+      val content = await(future)
+
+      ok(Json.stringify(Json.toJson(content)))
+    }
   }
 
   @DELETE
