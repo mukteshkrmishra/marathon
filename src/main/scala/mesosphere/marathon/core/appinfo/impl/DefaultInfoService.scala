@@ -1,11 +1,14 @@
 package mesosphere.marathon
 package core.appinfo.impl
 
+import akka.stream.Materializer
+import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.appinfo.AppInfo.Embed
 import mesosphere.marathon.core.appinfo._
 import mesosphere.marathon.core.group.GroupManager
 import mesosphere.marathon.core.pod.PodDefinition
+import mesosphere.marathon.core.storage.repository.RepositoryConstants
 import mesosphere.marathon.raml.PodStatus
 import mesosphere.marathon.state._
 import mesosphere.marathon.stream.Implicits._
@@ -29,6 +32,13 @@ private[appinfo] class DefaultInfoService(
         case None => Option.empty[PodStatus]
       }
     }
+
+  override def selectPodStatuses(ids: Set[PathId], selector: PodSelector)(implicit materializer: Materializer): Future[Seq[PodStatus]] = {
+    val baseData = newBaseData()
+
+    val pods = ids.flatMap(groupManager.pod(_))
+    Source(pods).mapAsync(RepositoryConstants.maxConcurrency) { pod => baseData.podStatus(pod) }.runWith(Sink.seq)
+  }
 
   override def selectApp(id: PathId, selector: AppSelector, embed: Set[AppInfo.Embed]): Future[Option[AppInfo]] = {
     logger.debug(s"queryForAppId $id")

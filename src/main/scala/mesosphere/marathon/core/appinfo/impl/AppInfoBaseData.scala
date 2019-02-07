@@ -161,7 +161,8 @@ class AppInfoBaseData(
 
   def podStatus(podDef: PodDefinition): Future[PodStatus] = async { // linter:ignore UnnecessaryElseBranch
 
-    val traceToken = new org.apache.commons.text.RandomStringGenerator.Builder().build().generate(8)
+    import java.util.UUID
+    val traceToken = UUID.randomUUID()
     logger.info(s"+++ $traceToken Fetching pod status for ${podDef.id}")
 
     val start = System.currentTimeMillis()
@@ -238,7 +239,7 @@ class AppInfoBaseData(
 
   def podInstanceStatus(instance: Instance): Option[PodInstanceStatus] = {
     val maybePodSpec: Option[PodDefinition] = instance.runSpec match {
-      case podDef: PodDefinition  => Some(podDef)
+      case podDef: PodDefinition => Some(podDef)
       case _ => None
     }
 

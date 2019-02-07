@@ -261,12 +261,7 @@ class PodsResource @Inject() (
     async {
       implicit val identity = await(authenticatedAsync(req))
 
-      val future = Source(podSystem.ids()).mapAsync(RepositoryConstants.maxConcurrency) { id =>
-        podStatusService.selectPodStatus(id, authzSelector)
-      }.collect { case Some(podStatus) => podStatus }.runWith(Sink.seq)
-
-      val content = await(future)
-
+      val content = await(podStatusService.selectPodStatuses(podSystem.ids(), authzSelector))
       ok(Json.stringify(Json.toJson(content)))
     }
   }
