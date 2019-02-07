@@ -25,6 +25,7 @@ class AppObject:
             path = '{}/v2/apps/{}'.format(self._base, app_id)
             async with session.delete(path) as resp:
                 logger.info('Done deleting %s: %d', app_id, resp.status)
+                await resp.text()
 
 
 class AppsCollection:
@@ -85,14 +86,15 @@ def app_spec(app_id):
 async def create_apps(number):
     client = Marathon(MARATHON_BASE)
     for app_id in app_ids(number):
+        logger.info('Create app with id %s', app_id)
         spec = app_spec(app_id)
 
         @retry(before_sleep=before_sleep_log(logger, logging.DEBUG), before=before_log(logger, logging.DEBUG), wait=wait_fixed(2))
-        async def create():
+        async def create(spec):
             await client.apps().create(spec)
 
         # Fire and forget.
-        asyncio.ensure_future(create())
+        asyncio.ensure_future(create(spec))
 
 
 if __name__ == "__main__":
