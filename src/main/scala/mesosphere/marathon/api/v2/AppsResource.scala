@@ -67,19 +67,13 @@ class AppsResource @Inject() (
     @QueryParam("id") id: String,
     @QueryParam("label") label: String,
     @QueryParam("embed") embed: java.util.Set[String],
-    @Context req: HttpServletRequest,
-    @Suspended asyncResponse: AsyncResponse): Unit = sendResponse(asyncResponse) {
-    async {
-      implicit val identity = await(authenticatedAsync(req))
-
-      val selector = selectAuthorized(search(Option(cmd), Option(id), Option(label)))
-      // additional embeds are deprecated!
-      val resolvedEmbed = InfoEmbedResolver.resolveApp(embed) +
-        AppInfo.Embed.Counts + AppInfo.Embed.Deployments
-
-      val mapped = await(appInfoService.selectAppsBy(selector, resolvedEmbed))
-      ok(jsonObjString("apps" -> mapped))
-    }
+    @Context req: HttpServletRequest): Response = authenticated(req) { implicit identity =>
+    val selector = selectAuthorized(search(Option(cmd), Option(id), Option(label)))
+    // additional embeds are deprecated!
+    val resolvedEmbed = InfoEmbedResolver.resolveApp(embed) +
+      AppInfo.Embed.Counts + AppInfo.Embed.Deployments
+    val mapped = result(appInfoService.selectAppsBy(selector, resolvedEmbed))
+    Response.ok(jsonObjString("apps" -> mapped)).build()
   }
 
   @POST
