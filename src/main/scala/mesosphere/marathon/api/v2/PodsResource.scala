@@ -158,26 +158,8 @@ class PodsResource @Inject() (
     async {
       implicit val identity = await(authenticatedAsync(req))
 
-      import java.util.UUID
-      val traceToken = UUID.randomUUID()
-      val start = System.currentTimeMillis()
-
       val pods = podSystem.findAll(isAuthorized(ViewRunSpec, _))
-
-      val aggregateTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken Aggregation took: ${aggregateTime - start}ms")
-
-      val asRaml = pods.map(Raml.toRaml(_))
-
-      val ramlTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken To RAML took: ${ramlTime - aggregateTime}ms")
-
-      val asJson = Json.stringify(Json.toJson(asRaml))
-
-      val jsonTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken To JSON took: ${jsonTime - ramlTime}ms")
-
-      ok(asJson)
+      ok(Json.stringify(Json.toJson(pods.map(Raml.toRaml(_)))))
     }
   }
 

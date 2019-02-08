@@ -77,21 +77,8 @@ class AppsResource @Inject() (
       val resolvedEmbed = InfoEmbedResolver.resolveApp(embed) +
         AppInfo.Embed.Counts + AppInfo.Embed.Deployments
 
-      import java.util.UUID
-      val traceToken = UUID.randomUUID()
-      val start = System.currentTimeMillis()
-
       val mapped = await(appInfoService.selectAppsBy(selector, resolvedEmbed))
-
-      val selectTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken Select took: ${selectTime - start}ms")
-
-      val json = jsonObjString("apps" -> mapped)
-
-      val jsonTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken JSON took: ${jsonTime - selectTime}ms")
-
-      ok(json)
+      ok(jsonObjString("apps" -> mapped))
     }
   }
 
