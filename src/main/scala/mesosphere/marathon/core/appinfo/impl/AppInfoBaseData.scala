@@ -161,17 +161,17 @@ class AppInfoBaseData(
 
   def podStatus(podDef: PodDefinition): Future[PodStatus] = async { // linter:ignore UnnecessaryElseBranch
 
-//    import java.util.UUID
-//    val traceToken = UUID.randomUUID()
-//    logger.info(s"+++ $traceToken Fetching pod status for ${podDef.id}")
+    //    import java.util.UUID
+    //    val traceToken = UUID.randomUUID()
+    //    logger.info(s"+++ $traceToken Fetching pod status for ${podDef.id}")
 
     val start = System.currentTimeMillis()
 
     val now = clock.now().toOffsetDateTime
     val instances = await(instancesByRunSpecFuture).specInstances(podDef.id)
 
-//    val instancesBySpecTime = System.currentTimeMillis()
-//    logger.info(s"+++ $traceToken Instances by spec took: ${instancesBySpecTime - start}ms")
+    //    val instancesBySpecTime = System.currentTimeMillis()
+    //    logger.info(s"+++ $traceToken Instances by spec took: ${instancesBySpecTime - start}ms")
 
     val instanceStatus = instances
       .filter(!_.isScheduled)
@@ -179,8 +179,8 @@ class AppInfoBaseData(
     val statusSince = if (instanceStatus.isEmpty) now else instanceStatus.map(_.statusSince).max
     val state = await(podState(podDef.instances, instanceStatus, isPodTerminating(podDef.id)))
 
-//    val podStateTime = System.currentTimeMillis()
-//    logger.info(s"+++ $traceToken Pod state took: ${podStateTime - instancesBySpecTime}ms")
+    //    val podStateTime = System.currentTimeMillis()
+    //    logger.info(s"+++ $traceToken Pod state took: ${podStateTime - instancesBySpecTime}ms")
 
     val taskFailureOpt: Option[TaskFailure] = await {
       taskFailureRepository
@@ -195,8 +195,8 @@ class AppInfoBaseData(
       }
     }
 
-//    val taskFailureTime = System.currentTimeMillis()
-//    logger.info(s"+++ $traceToken Task failure took: ${taskFailureTime - podStateTime}ms")
+    //    val taskFailureTime = System.currentTimeMillis()
+    //    logger.info(s"+++ $traceToken Task failure took: ${taskFailureTime - podStateTime}ms")
 
     import mesosphere.mesos.protos.Implicits.taskStateToCaseClass
 
@@ -222,8 +222,8 @@ class AppInfoBaseData(
         )
     }.toList
 
-//    val terminationHistoryTime = System.currentTimeMillis()
-//    logger.info(s"+++ $traceToken Termination history took: ${terminationHistoryTime - taskFailureTime}ms")
+    //    val terminationHistoryTime = System.currentTimeMillis()
+    //    logger.info(s"+++ $traceToken Termination history took: ${terminationHistoryTime - taskFailureTime}ms")
 
     PodStatus(
       id = podDef.id.toString,

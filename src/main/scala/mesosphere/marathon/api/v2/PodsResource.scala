@@ -3,13 +3,13 @@ package api.v2
 
 import java.time.Clock
 import java.net.URI
+
 import javax.inject.Inject
 import javax.servlet.http.HttpServletRequest
 import javax.ws.rs._
 import javax.ws.rs.container.{AsyncResponse, Suspended}
 import javax.ws.rs.core.Response.Status
 import javax.ws.rs.core.{Context, MediaType, Response}
-
 import akka.event.EventStream
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
@@ -28,8 +28,10 @@ import mesosphere.marathon.state.{PathId, Timestamp, VersionInfo}
 import mesosphere.marathon.util.SemanticVersion
 import play.api.libs.json.Json
 import Normalization._
+import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.plugin.PluginManager
 import mesosphere.marathon.api.v2.Validation._
+
 import scala.concurrent.ExecutionContext
 import scala.async.Async._
 
@@ -49,7 +51,7 @@ class PodsResource @Inject() (
     clock: Clock,
     scheduler: MarathonScheduler,
     pluginManager: PluginManager,
-    val executionContext: ExecutionContext) extends RestResource with AuthResource {
+    val executionContext: ExecutionContext) extends RestResource with AuthResource with StrictLogging {
 
   import PodsResource._
   implicit def podDefValidator: Validator[Pod] =
@@ -261,8 +263,21 @@ class PodsResource @Inject() (
     async {
       implicit val identity = await(authenticatedAsync(req))
 
+      import java.util.UUID
+      val traceToken = UUID.randomUUID()
+      val start = System.currentTimeMillis()
+
       val content = await(podStatusService.selectPodStatuses(podSystem.ids(), authzSelector))
-      ok(Json.stringify(Json.toJson(content)))
+
+      val contentTime = System.currentTimeMillis()
+      logger.info(s"+++ $traceToken content took: ${contentTime - start}ms")
+
+      val json = Json.stringify(Json.toJson(content))
+
+      val jsonTime = System.currentTimeMillis()
+      logger.info(s"+++ $traceToken json took: ${jsonTime - contentTime}ms")
+
+      ok(json)
     }
   }
 

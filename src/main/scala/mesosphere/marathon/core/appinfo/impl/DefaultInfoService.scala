@@ -36,8 +36,8 @@ private[appinfo] class DefaultInfoService(
   override def selectPodStatuses(ids: Set[PathId], selector: PodSelector)(implicit materializer: Materializer): Future[Seq[PodStatus]] = {
     val baseData = newBaseData()
 
-    val pods = ids.flatMap(groupManager.pod(_))
-    Source(pods).mapAsync(RepositoryConstants.maxConcurrency) { pod => baseData.podStatus(pod) }.runWith(Sink.seq)
+    val pods = ids.flatMap(groupManager.pod(_)).toVector
+    Future.sequence(pods.map(baseData.podStatus(_)))
   }
 
   override def selectApp(id: PathId, selector: AppSelector, embed: Set[AppInfo.Embed]): Future[Option[AppInfo]] = {
