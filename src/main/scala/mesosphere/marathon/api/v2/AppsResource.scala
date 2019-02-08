@@ -10,6 +10,7 @@ import javax.ws.rs._
 import javax.ws.rs.container.{AsyncResponse, Suspended}
 import javax.ws.rs.core.{Context, MediaType, Response}
 import akka.event.EventStream
+import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.api.v2.Validation._
 import mesosphere.marathon.api.v2.json.Formats._
 import mesosphere.marathon.api.{AuthResource, PATCH, RestResource}
@@ -42,7 +43,7 @@ class AppsResource @Inject() (
     pluginManager: PluginManager)(implicit
     val authenticator: Authenticator,
     val authorizer: Authorizer,
-    val executionContext: ExecutionContext) extends RestResource with AuthResource {
+    val executionContext: ExecutionContext) extends RestResource with AuthResource with StrictLogging {
 
   import AppHelpers._
   import Normalization._
@@ -66,13 +67,32 @@ class AppsResource @Inject() (
     @QueryParam("id") id: String,
     @QueryParam("label") label: String,
     @QueryParam("embed") embed: java.util.Set[String],
-    @Context req: HttpServletRequest): Response = authenticated(req) { implicit identity =>
-    val selector = selectAuthorized(search(Option(cmd), Option(id), Option(label)))
-    // additional embeds are deprecated!
-    val resolvedEmbed = InfoEmbedResolver.resolveApp(embed) +
-      AppInfo.Embed.Counts + AppInfo.Embed.Deployments
-    val mapped = result(appInfoService.selectAppsBy(selector, resolvedEmbed))
-    Response.ok(jsonObjString("apps" -> mapped)).build()
+    @Context req: HttpServletRequest,
+    @Suspended asyncResponse: AsyncResponse): Unit = sendResponse(asyncResponse) {
+    async {
+      implicit val identity = await(authenticatedAsync(req))
+
+      val selector = selectAuthorized(search(Option(cmd), Option(id), Option(label)))
+      // additional embeds are deprecated!
+      val resolvedEmbed = InfoEmbedResolver.resolveApp(embed) +
+        AppInfo.Embed.Counts + AppInfo.Embed.Deployments
+
+      import java.util.UUID
+      val traceToken = UUID.randomUUID()
+      val start = System.currentTimeMillis()
+
+      val mapped = await(appInfoService.selectAppsBy(selector, resolvedEmbed))
+
+      val selectTime = System.currentTimeMillis()
+      logger.info(s"+++ $traceToken Select took: ${selectTime - start}ms")
+
+      val json = jsonObjString("apps" -> mapped)
+
+      val jsonTime = System.currentTimeMillis()
+      logger.info(s"+++ $traceToken JSON took: ${jsonTime - selectTime}ms")
+
+      ok(json)
+    }
   }
 
   @POST

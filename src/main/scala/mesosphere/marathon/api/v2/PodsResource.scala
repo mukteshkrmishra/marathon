@@ -165,17 +165,17 @@ class PodsResource @Inject() (
       val pods = podSystem.findAll(isAuthorized(ViewRunSpec, _))
 
       val aggregateTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken Aggregation took: ${start - aggregateTime}ms")
+      logger.info(s"+++ $traceToken Aggregation took: ${aggregateTime - start}ms")
 
       val asRaml = pods.map(Raml.toRaml(_))
 
       val ramlTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken To RAML took: ${aggregateTime - ramlTime}ms")
+      logger.info(s"+++ $traceToken To RAML took: ${ramlTime - aggregateTime}ms")
 
       val asJson = Json.stringify(Json.toJson(asRaml))
 
       val jsonTime = System.currentTimeMillis()
-      logger.info(s"+++ $traceToken To JSON took: ${ramlTime - jsonTime}ms")
+      logger.info(s"+++ $traceToken To JSON took: ${jsonTime - ramlTime}ms")
 
       ok(asJson)
     }
