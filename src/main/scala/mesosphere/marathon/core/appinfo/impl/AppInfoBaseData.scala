@@ -164,8 +164,7 @@ class AppInfoBaseData(
     //    import java.util.UUID
     //    val traceToken = UUID.randomUUID()
     //    logger.info(s"+++ $traceToken Fetching pod status for ${podDef.id}")
-
-    val start = System.currentTimeMillis()
+    //val start = System.currentTimeMillis()
 
     val now = clock.now().toOffsetDateTime
     val instances = await(instancesByRunSpecFuture).specInstances(podDef.id)
