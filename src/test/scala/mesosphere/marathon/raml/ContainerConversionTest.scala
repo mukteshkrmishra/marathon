@@ -26,7 +26,6 @@ class ContainerConversionTest extends UnitTest {
 
       "convert to a RAML container" in {
         raml.`type` should be(EngineType.Mesos)
-        raml.appc should be(empty)
         raml.docker should be(empty)
         raml.volumes should be(Seq(ramlHostVolume))
         raml.portMappings should contain(Seq(ramlPortMapping))
@@ -54,7 +53,6 @@ class ContainerConversionTest extends UnitTest {
 
       "convert to a RAML container" in {
         raml.`type` should be(EngineType.Mesos)
-        raml.appc should be(empty)
         raml.volumes should be(Seq(ramlHostVolume))
         raml.portMappings should contain(Seq(ramlPortMapping))
         raml.docker should be(defined)
@@ -87,41 +85,6 @@ class ContainerConversionTest extends UnitTest {
         mc.credential shouldBe Some(credentials)
         mc.pullConfig shouldBe Some(dockerPullConfig)
         mc.forcePullImage should be(container.docker.head.forcePullImage)
-      }
-    }
-  }
-
-  "A Mesos AppC container is created correctly" when {
-    "a mesos-appc container" should {
-      val container = state.Container.MesosAppC(Seq(coreHostVolume), "test", Seq(corePortMapping), Some("id"))
-      val raml = container.toRaml[Container]
-
-      behave like convertToProtobufThenToRAML(container, raml)
-
-      "convert to a RAML container" in {
-        raml.`type` should be(EngineType.Mesos)
-        raml.volumes should be(Seq(ramlHostVolume))
-        raml.portMappings should contain(Seq(ramlPortMapping))
-        raml.docker should be(empty)
-        raml.appc should be(defined)
-        raml.appc.get.image should be("test")
-        raml.appc.get.id should be(Some("id"))
-      }
-    }
-    "a RAML container" should {
-      "convert to a mesos-appc container" in {
-        val container = Container(
-          EngineType.Mesos, portMappings = Option(Seq(ramlPortMapping)), appc = Some(AppCContainer(image = "foo")),
-          volumes = Seq(ramlHostVolume))
-        val mc = Some(container.fromRaml).collect {
-          case c: state.Container.MesosAppC => c
-        }.getOrElse(fail("expected Container.MesosAppC"))
-        mc.portMappings should be(Seq(corePortMapping))
-        mc.volumes should be(Seq(coreHostVolume))
-        mc.image should be("foo")
-        mc.forcePullImage should be(container.appc.head.forcePullImage)
-        mc.id should be(container.appc.head.id)
-        mc.labels should be(empty)
       }
     }
   }
@@ -212,7 +175,6 @@ class ContainerConversionTest extends UnitTest {
 
       "convert to a RAML container" in {
         raml.`type` should be(EngineType.Docker)
-        raml.appc should be(empty)
         raml.volumes should be(Seq(ramlHostVolume))
         raml.docker should be(defined)
         raml.docker.get.image should be("test")
