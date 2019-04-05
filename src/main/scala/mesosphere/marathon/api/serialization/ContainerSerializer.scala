@@ -427,15 +427,15 @@ object MesosDockerSerializer {
 
 object LinuxInfoSerializer {
   def fromProto(proto: Protos.ExtendedContainerInfo.LinuxInfo): Option[LinuxInfo] = {
-    if(!proto.hasSeccomp) return None
+    if (!proto.hasSeccomp) return None
     val seccomp = proto.getSeccomp
 
     //    a seccomp with nothing in it is the same as not defining seccomp
-    if(!seccomp.hasProfileName && !seccomp.hasUnconfined) return None
+    if (!seccomp.hasProfileName && !seccomp.hasUnconfined) return None
 
     //    if we define a LinuxInfo, we specify the unconfined even if not provided.  if not defined it is false
-    val unconfined = if(seccomp.hasUnconfined) seccomp.getUnconfined else false
-    val profile = if(seccomp.hasProfileName) Some(seccomp.getProfileName) else None
+    val unconfined = if (seccomp.hasUnconfined) seccomp.getUnconfined else false
+    val profile = if (seccomp.hasProfileName) Some(seccomp.getProfileName) else None
 
     Some(LinuxInfo(Some(Seccomp(profile, unconfined))))
   }
@@ -460,9 +460,9 @@ object LinuxInfoSerializer {
       val seccompBuilder = mesos.Protos.SeccompInfo.newBuilder
         .setUnconfined(seccomp.unconfined)
 
-      seccomp.profileName.foreach{ profileName=>
-          seccompBuilder.setProfileName(profileName)
-        }
+      seccomp.profileName.foreach{ profileName =>
+        seccompBuilder.setProfileName(profileName)
+      }
       linuxBuilder.setSeccomp(seccompBuilder)
     }
     linuxBuilder.build
