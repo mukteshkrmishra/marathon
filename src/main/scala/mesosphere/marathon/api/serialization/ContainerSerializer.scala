@@ -21,7 +21,8 @@ object ContainerSerializer {
       val pms = proto.getPortMappingsList
       Container.Mesos(
         volumes = proto.getVolumesList.map(VolumeWithMount(None, _))(collection.breakOut),
-        portMappings = pms.map(PortMappingSerializer.fromProto)(collection.breakOut)
+        portMappings = pms.map(PortMappingSerializer.fromProto)(collection.breakOut),
+        linuxInfo = if (proto.hasLinuxInfo) LinuxInfoSerializer.fromProto(proto.getLinuxInfo) else None
       )
     }
   }
@@ -34,12 +35,18 @@ object ContainerSerializer {
     container match {
       case _: Container.Mesos =>
         builder.setType(mesos.Protos.ContainerInfo.Type.MESOS)
+        container.linuxInfo.foreach { linuxInfo =>
+          builder.setLinuxInfo(LinuxInfoSerializer.toProto(linuxInfo))
+        }
       case dd: Container.Docker =>
         builder.setType(mesos.Protos.ContainerInfo.Type.DOCKER)
         builder.setDocker(DockerSerializer.toProto(dd))
       case md: Container.MesosDocker =>
         builder.setType(mesos.Protos.ContainerInfo.Type.MESOS)
         builder.setMesosDocker(MesosDockerSerializer.toProto(md))
+        md.linuxInfo.foreach { linuxInfo =>
+          builder.setLinuxInfo(LinuxInfoSerializer.toProto(linuxInfo))
+        }
       case ma: Container.MesosAppC =>
         builder.setType(mesos.Protos.ContainerInfo.Type.MESOS)
         builder.setMesosAppC(MesosAppCSerializer.toProto(ma))
@@ -380,13 +387,16 @@ object MesosDockerSerializer {
   def fromProto(proto: Protos.ExtendedContainerInfo): Container.MesosDocker = {
     val d = proto.getMesosDocker
     val pms = proto.getPortMappingsList
+    val linuxInfo = if (proto.hasLinuxInfo) LinuxInfoSerializer.fromProto(proto.getLinuxInfo) else None
+
     Container.MesosDocker(
       volumes = proto.getVolumesList.map(VolumeWithMount(None, _))(collection.breakOut),
       portMappings = pms.map(PortMappingSerializer.fromProto)(collection.breakOut),
       image = d.getImage,
       credential = if (d.hasDeprecatedCredential) Some(CredentialSerializer.fromMesos(d.getDeprecatedCredential)) else None,
       pullConfig = if (d.hasPullConfig) Some(DockerPullConfigSerializer.fromProto(d.getPullConfig)) else None,
-      forcePullImage = if (d.hasForcePullImage) d.getForcePullImage else false
+      forcePullImage = if (d.hasForcePullImage) d.getForcePullImage else false,
+      linuxInfo = linuxInfo
     )
   }
 
@@ -430,7 +440,7 @@ object LinuxInfoSerializer {
     if (!proto.hasSeccomp) return None
     val seccomp = proto.getSeccomp
 
-    //    a seccomp with nothing in it is the same as not defining seccomp
+    //    if a seccomp with nothing in it, it is the same as not defining seccomp
     if (!seccomp.hasProfileName && !seccomp.hasUnconfined) return None
 
     //    if we define a LinuxInfo, we specify the unconfined even if not provided.  if not defined it is false
