@@ -27,6 +27,8 @@ trait ContainerConversion extends HealthCheckConversion with VolumeConversion wi
     )
   }
 
+  //  implicit val linuxInfoRamlWrite: Writes[Linux]
+
   implicit val containerRamlReads: Reads[PodContainer, MesosContainer] = Reads { c =>
     MesosContainer(
       name = c.name,

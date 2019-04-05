@@ -65,6 +65,9 @@ object ContainerSerializer {
     container match {
       case _: Container.Mesos =>
         builder.setType(mesos.Protos.ContainerInfo.Type.MESOS)
+        container.linuxInfo.foreach { linuxInfo =>
+          builder.setLinuxInfo(LinuxInfoSerializer.toMesos(linuxInfo))
+        }
       case dd: Container.Docker =>
         builder.setType(mesos.Protos.ContainerInfo.Type.DOCKER)
         builder.setDocker(DockerSerializer.toMesos(dd, networks))
@@ -75,6 +78,9 @@ object ContainerSerializer {
       case md: Container.MesosDocker =>
         builder.setType(mesos.Protos.ContainerInfo.Type.MESOS)
         builder.setMesos(MesosDockerSerializer.toMesos(md))
+        md.linuxInfo.foreach { linuxInfo =>
+          builder.setLinuxInfo(LinuxInfoSerializer.toMesos(linuxInfo))
+        }
       case ma: Container.MesosAppC =>
         builder.setType(mesos.Protos.ContainerInfo.Type.MESOS)
         builder.setMesos(MesosAppCSerializer.toMesos(ma))
@@ -416,6 +422,50 @@ object MesosDockerSerializer {
       .setCached(!container.forcePullImage)
 
     mesos.Protos.ContainerInfo.MesosInfo.newBuilder.setImage(imageBuilder).build
+  }
+}
+
+object LinuxInfoSerializer {
+  def fromProto(proto: Protos.ExtendedContainerInfo.LinuxInfo): Option[LinuxInfo] = {
+    if(!proto.hasSeccomp) return None
+    val seccomp = proto.getSeccomp
+
+    //    a seccomp with nothing in it is the same as not defining seccomp
+    if(!seccomp.hasProfileName && !seccomp.hasUnconfined) return None
+
+    //    if we define a LinuxInfo, we specify the unconfined even if not provided.  if not defined it is false
+    val unconfined = if(seccomp.hasUnconfined) seccomp.getUnconfined else false
+    val profile = if(seccomp.hasProfileName) Some(seccomp.getProfileName) else None
+
+    Some(LinuxInfo(Some(Seccomp(profile, unconfined))))
+  }
+
+  def toProto(linuxInfo: LinuxInfo): Protos.ExtendedContainerInfo.LinuxInfo = {
+    val builder = Protos.ExtendedContainerInfo.LinuxInfo.newBuilder
+
+    linuxInfo.seccomp.foreach { seccomp =>
+      val seccompBuilder = Protos.ExtendedContainerInfo.LinuxInfo.Seccomp.newBuilder
+        .setUnconfined(seccomp.unconfined)
+      seccomp.profileName.foreach { profileName =>
+        seccompBuilder.setProfileName(profileName)
+      }
+      builder.setSeccomp(seccompBuilder)
+    }
+    builder.build
+  }
+
+  def toMesos(linuxInfo: LinuxInfo): mesos.Protos.LinuxInfo = {
+    val linuxBuilder = mesos.Protos.LinuxInfo.newBuilder
+    linuxInfo.seccomp.foreach { seccomp =>
+      val seccompBuilder = mesos.Protos.SeccompInfo.newBuilder
+        .setUnconfined(seccomp.unconfined)
+
+      seccomp.profileName.foreach{ profileName=>
+          seccompBuilder.setProfileName(profileName)
+        }
+      linuxBuilder.setSeccomp(seccompBuilder)
+    }
+    linuxBuilder.build
   }
 }
 

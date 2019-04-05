@@ -280,7 +280,6 @@ message ExtendedContainerInfo {
     }
 
     optional Seccomp seccomp = 1;
-
   }
 
   // AppC on the universal Mesos engine
