@@ -9,6 +9,7 @@ import org.apache.mesos.{Protos => Mesos}
 
 trait ContainerConversion extends HealthCheckConversion with VolumeConversion with NetworkConversion {
 
+  // TODO: need linuxInfo in Pods
   implicit val containerRamlWrites: Writes[MesosContainer, PodContainer] = Writes { c =>
     PodContainer(
       name = c.name,
@@ -27,8 +28,7 @@ trait ContainerConversion extends HealthCheckConversion with VolumeConversion wi
     )
   }
 
-  //  implicit val linuxInfoRamlWrite: Writes[Linux]
-
+  // TODO: need linuxInfo in Pods
   implicit val containerRamlReads: Reads[PodContainer, MesosContainer] = Reads { c =>
     MesosContainer(
       name = c.name,
@@ -119,6 +119,15 @@ trait ContainerConversion extends HealthCheckConversion with VolumeConversion wi
     case DockerPullConfig(secret) => state.Container.DockerPullConfig(secret)
   }
 
+  def validateLinuxInfo(linuxInfo: Option[state.LinuxInfo]) = {
+    if (linuxInfo.isDefined
+      && linuxInfo.get.seccomp.isDefined
+      && linuxInfo.get.seccomp.get.profileName.isDefined
+      && linuxInfo.get.seccomp.get.unconfined) {
+      throw new SerializationFailedException("Seccomp can not have unconfined and profile name set")
+    }
+  }
+
   implicit val appContainerRamlReader: Reads[Container, state.Container] = Reads { container =>
     val volumes = container.volumes.map(Raml.fromRaml(_))
     val portMappings: Seq[state.Container.PortMapping] = container.portMappings.getOrElse(Nil).map(Raml.fromRaml(_))
@@ -161,6 +170,7 @@ trait ContainerConversion extends HealthCheckConversion with VolumeConversion wi
         )
       case ct => throw SerializationFailedException(s"illegal container specification $ct")
     }
+    validateLinuxInfo(result.linuxInfo)
     result
   }
 
